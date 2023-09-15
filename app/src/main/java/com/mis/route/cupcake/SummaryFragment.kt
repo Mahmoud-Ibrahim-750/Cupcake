@@ -15,13 +15,16 @@
  */
 package com.mis.route.cupcake
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
+import androidx.navigation.fragment.findNavController
 import com.mis.route.cupcake.databinding.FragmentSummaryBinding
+import com.mis.route.cupcake.viewmodel.OrderViewModel
 
 /**
  * [SummaryFragment] contains a summary of the order details with a button to share the order
@@ -34,10 +37,16 @@ class SummaryFragment : Fragment() {
     // when the view hierarchy is attached to the fragment.
     private var binding: FragmentSummaryBinding? = null
 
+    // viewModels() gives you the ViewModel instance scoped to the current fragment.
+    // This will be different for different fragments.
+    // activityViewModels() gives you the ViewModel instance scoped to the current activity.
+    // Therefore the instance will remain the same across multiple fragments in the same activity.
+    private val sharedViewModel: OrderViewModel by activityViewModels()
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View? {
+    ): View {
         val fragmentBinding = FragmentSummaryBinding.inflate(inflater, container, false)
         binding = fragmentBinding
         return fragmentBinding.root
@@ -47,7 +56,9 @@ class SummaryFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         binding?.apply {
-            sendButton.setOnClickListener { sendOrder() }
+            viewModel = sharedViewModel
+            lifecycleOwner = viewLifecycleOwner
+            summaryFragment = this@SummaryFragment
         }
     }
 
@@ -55,7 +66,28 @@ class SummaryFragment : Fragment() {
      * Submit the order by sharing out the order details to another app via an implicit intent.
      */
     fun sendOrder() {
-        Toast.makeText(activity, "Send Order", Toast.LENGTH_SHORT).show()
+        val numberOfCupcakes = sharedViewModel.orderQuantity.value ?: 0
+        val orderSummary = getString(
+            R.string.order_details,
+            resources.getQuantityString(R.plurals.cupcakes, numberOfCupcakes, numberOfCupcakes),
+            sharedViewModel.orderFlavor.value.toString(),
+            sharedViewModel.orderPickupDate.value.toString(),
+            sharedViewModel.orderPrice.value.toString()
+        )
+
+        val intent = Intent(Intent.ACTION_SEND)
+            .setType("text/plain")
+            .putExtra(Intent.EXTRA_SUBJECT, getString(R.string.new_cupcake_order))
+            .putExtra(Intent.EXTRA_TEXT, orderSummary)
+        // check if there is an activity that can handle the action
+        if (activity?.packageManager?.resolveActivity(intent, 0) != null) {
+            startActivity(intent)
+        }
+    }
+
+    fun cancelOrder() {
+        sharedViewModel.resetOrder()
+        findNavController().navigate(R.id.action_summaryFragment_to_startFragment)
     }
 
     /**
